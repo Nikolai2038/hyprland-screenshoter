@@ -30,9 +30,20 @@ screenshot_take() {
   __file_dir="$(dirname "${__file_path}")" || return "$?"
   __file_name="$(basename "${__file_path}")" || return "$?"
 
+  # Freeze screen in the background
+  # NOTE: We don't use "hyprshot --freeze", because it does not properly copy freezed content.
+  #       For example, some menu pop-ups, which looks like frozen, for some reason will not appear in the final screenshot.
+  #       This happens for me with some pop-ups (not always, but frequently) on sites in the browser (Firefox).
+  hyprpicker --quiet --no-zoom --disable-hex-preview --no-fancy --render-inactive &
+  __hyprpicker_pid=$!
+  sleep 0.05 || return "$?"
+
   # Take screenshot and save to temporary file.
   # NOTE: We write directly to the file and not via stdout pipe, because sometimes in bugs out and no image is copied in the end.
-  hyprshot --freeze --silent --mode="${__mode}" --output-folder "${__file_dir}" --filename "${__file_name}" || return "$?"
+  hyprshot --silent --mode="${__mode}" --output-folder "${__file_dir}" --filename "${__file_name}" || return "$?"
+
+  # Unfreeze screen
+  kill "${__hyprpicker_pid}" || return "$?"
 
   # Issue https://github.com/Nikolai2038/hyprland-screenshoter/issues/1
   local max_time_to_wait=5

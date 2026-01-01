@@ -23,7 +23,7 @@ This script acts as a screenshoter for Hyprland.
 ### 4.1. CLI
 
 ```sh
-hyprland-screenshoter <region|window|output> <is_edit> <is_save> <is_compress>
+hyprland-screenshoter <region|window|output> <is_edit=0> <is_save=1> <is_compress=1>
 ```
 
 Example:
