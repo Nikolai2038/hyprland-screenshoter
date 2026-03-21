@@ -30,11 +30,25 @@ screenshot_take() {
   __file_dir="$(dirname "${__file_path}")" || return "$?"
   __file_name="$(basename "${__file_path}")" || return "$?"
 
+  declare -a __hyprpicker_args=(
+    --quiet
+    --no-zoom
+    --no-fancy
+    --render-inactive
+  )
+
+  if hyprpicker --help | grep --quiet -- '--disable-preview'; then
+    __hyprpicker_args+=(--disable-preview)
+  elif hyprpicker --help | grep --quiet -- '--disable-hex-preview'; then
+    # NOTE: Older versions of hyprpicker use "--disable-hex-preview" instead of "--disable-preview"
+    __hyprpicker_args+=(--disable-hex-preview)
+  fi
+
   # Freeze screen in the background
   # NOTE: We don't use "hyprshot --freeze", because it does not properly copy freezed content.
   #       For example, some menu pop-ups, which looks like frozen, for some reason will not appear in the final screenshot.
   #       This happens for me with some pop-ups (not always, but frequently) on sites in the browser (Firefox).
-  hyprpicker --quiet --no-zoom --disable-hex-preview --no-fancy --render-inactive &
+  hyprpicker "${__hyprpicker_args[@]}" &
   __hyprpicker_pid=$!
   sleep 0.05 || return "$?"
 
