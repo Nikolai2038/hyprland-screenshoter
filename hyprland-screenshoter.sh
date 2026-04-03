@@ -48,9 +48,13 @@ screenshot_take() {
   # NOTE: We don't use "hyprshot --freeze", because it does not properly copy freezed content.
   #       For example, some menu pop-ups, which looks like frozen, for some reason will not appear in the final screenshot.
   #       This happens for me with some pop-ups (not always, but frequently) on sites in the browser (Firefox).
-  hyprpicker "${__hyprpicker_args[@]}" &
+  # NOTE: We add timeout for hyprpicker, because sometimes it may start after "hyprshot" even with "sleep".
+  #       In this case, screen will be freezed and you can't do nothing, except switching to another TTY and killing via "pkill -SIGKILL hyprpicker".
+  #       So we kill it after 30 seconds to be able to have some solution.
+  #       It happened to me from time to time on decent performance machine with "sleep 0.05", so I increased it.
+  timeout 30 hyprpicker "${__hyprpicker_args[@]}" &
   __hyprpicker_pid=$!
-  sleep 0.05 || return "$?"
+  sleep 0.2 || return "$?"
 
   # Take screenshot and save to temporary file.
   # NOTE: We write directly to the file and not via stdout pipe, because sometimes in bugs out and no image is copied in the end.
