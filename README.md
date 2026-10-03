@@ -34,7 +34,36 @@ hyprland-screenshoter region 1 0 0
 
 ### 4.2. Hyprland keybindings
 
-Example:
+Example for the Lua config (`hyprland.lua`, Hyprland 0.55 and newer):
+
+```lua
+-- ========================================
+-- Hyprland Screenshoter
+-- (see https://github.com/Nikolai2038/hyprland-screenshoter)
+-- ========================================
+local mainMod = "SUPER"
+
+-- Screenshot a region: PRINT
+hl.bind("PRINT", hl.dsp.exec_cmd("hyprland-screenshoter region 0"))
+
+-- Screenshot a region and edit it: SHIFT + PRINT
+hl.bind("SHIFT + PRINT", hl.dsp.exec_cmd("hyprland-screenshoter region 1"))
+
+-- Screenshot a window: MOD + PRINT
+hl.bind(mainMod .. " + PRINT", hl.dsp.exec_cmd("hyprland-screenshoter window 0"))
+
+-- Screenshot a window and edit it: MOD + SHIFT + PRINT
+hl.bind(mainMod .. " + SHIFT + PRINT", hl.dsp.exec_cmd("hyprland-screenshoter window 1"))
+
+-- Screenshot a monitor: MOD + CTRL + PRINT
+hl.bind(mainMod .. " + CTRL + PRINT", hl.dsp.exec_cmd("hyprland-screenshoter output 0"))
+
+-- Screenshot a monitor and edit it: MOD + CTRL + SHIFT + PRINT
+hl.bind(mainMod .. " + CTRL + SHIFT + PRINT", hl.dsp.exec_cmd("hyprland-screenshoter output 1"))
+-- ========================================
+```
+
+Example for the `.conf` config (`hyprland.conf`, Hyprland 0.56 and older):
 
 ```conf
 # ========================================

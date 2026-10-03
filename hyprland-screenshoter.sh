@@ -12,8 +12,14 @@ hide_cursor() {
   # NOTE: This is not applicable for the cursor hovered over some text (in terminal, IDE, etc.).
   # See https://github.com/Gustash/Hyprshot/issues/64
   # See https://github.com/hyprwm/Hyprland/issues/1520
-  hyprctl keyword cursor:no_hardware_cursors false || return "$?"
-  hyprctl keyword cursor:use_cpu_buffer true || return "$?"
+  # NOTE: A Lua config (Hyprland 0.55 and newer) refuses "hyprctl keyword" and takes "hyprctl eval" instead.
+  #       A ".conf" config, and Hyprland before 0.55, do not answer "ok" to "hyprctl eval", so "hyprctl keyword" is used for them.
+  # See https://wiki.hypr.land/configuring/core/advanced-configuration/using-hyprctl/#eval
+  __eval_result="$(hyprctl eval 'hl.config({ cursor = { no_hardware_cursors = false, use_cpu_buffer = true } })')" || __eval_result=""
+  if [ "${__eval_result}" != "ok" ]; then
+    hyprctl keyword cursor:no_hardware_cursors false || return "$?"
+    hyprctl keyword cursor:use_cpu_buffer true || return "$?"
+  fi
 
   echo "Applying fixes to hide cursor: success!" >&2
 }
