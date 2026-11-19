@@ -9,8 +9,16 @@ This script acts as a screenshoter for Hyprland.
 - Arch Linux:
 
     ```sh
-    sudo pacman --noconfirm --sync --refresh --needed hyprshot hyprpicker swappy pngquant wl-clipboard
+    sudo pacman --noconfirm --sync --refresh --needed hyprpicker slurp pngquant swappy wl-clipboard
     ```
+
+    Where:
+
+    - `hyprpicker`: Freeze screen;
+    - `slurp`: Capture screen;
+    - `pngquant`: Compress image;
+    - `swappy`: Edit image (small simple editor to draw some lines);
+    - `wl-clipboard`: Copy image to the clipboard.
 
 ## 3. Installation
 

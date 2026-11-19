@@ -12,6 +12,7 @@ main() {
   fi
 
   sudo cp -T "${PWD}/hyprland-screenshoter.sh" /usr/local/bin/hyprland-screenshoter || return "$?"
+  sudo chmod +x /usr/local/bin/hyprland-screenshoter || return "$?"
 }
 
 main "$@" || exit "$?"

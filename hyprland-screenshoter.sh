@@ -6,6 +6,134 @@ set -o pipefail || exit "$?"
 # Extension of the screenshot files
 _FILE_EXTENSION='.png'
 
+# Takes a screenshot in Hyprland and saves it to a file.
+#
+# NOTE: Previously I used `hyprshot` (https://github.com/Gustash/Hyprshot/blob/main/hyprshot) for captures.
+#       Inspired by it, I moved to my own implementation - calling `slurp` directly.
+#
+# Usage: `capture <mode> <path_to_directory> <file_name>`.
+#
+# Where:
+#
+# - `mode`: What to screenshot: `output` the monitor the user selects, `window` the window the user selects, `region` the region the user selects;
+# - `path_to_directory`: Directory to save the screenshot into;
+# - `file_name`: Name of the resulting screenshot file.
+#
+# Return codes:
+#
+# - `0`: The screenshot was taken and saved;
+# - `1`: The selection failed: no windows found on the active workspaces, unparseable geometry, or the selected window lies outside the bounds of the monitors;
+# - `2`: Invalid usage (unknown mode);
+# - Other: The error code of one of the functions and tools it calls.
+capture() {
+  local mode="${1-}" && shift "$(($# > 0))"
+  local output_folder_path="${1-}" && shift "$(($# > 0))"
+  local file_name="${1-}" && shift "$(($# > 0))"
+
+  if [ "${mode}" != 'output' ] && [ "${mode}" != 'window' ] && [ "${mode}" != 'region' ]; then
+    echo "[Error] Usage: capture <mode> <path_to_directory> <file_name>
+Where:
+- \"mode\" is one of:
+  - \"output\": Select monitor;
+  - \"window\": Select window;
+  - \"region\": Select region;
+- \"path_to_directory\": Directory to save the screenshot into;
+- \"file_name\": Name of the resulting screenshot file." >&2
+    return 2
+  fi
+
+  local geometry=''
+  if [ "${mode}" = 'output' ]; then
+    geometry="$(slurp -or)" || return "$?"
+  elif [ "${mode}" = 'region' ]; then
+    geometry="$(slurp -d)" || return "$?"
+  else
+    geometry="$(window_geometry_get)" || return "$?"
+  fi
+
+  mkdir -p -- "${output_folder_path}" || return "$?"
+  grim -g "${geometry}" -- "${output_folder_path}/${file_name}" || return "$?"
+}
+
+# Prints the geometry of the window which the user selects, clamped to the bounds of the monitors
+#
+# Return codes:
+#
+# - `0`: The geometry was printed;
+# - `1`: No windows found on the active workspaces, unparseable selection geometry, or the selected window lies outside the bounds of the monitors;
+# - Other: The error code of `hyprctl`, `jq` or `slurp`.
+window_geometry_get() {
+  local monitors=''
+  monitors="$(hyprctl -j monitors)" || return "$?"
+
+  local active_workspace_ids=''
+  active_workspace_ids="$(jq -r 'map(.activeWorkspace.id) | join(",")' <<< "${monitors}")" || return "$?"
+
+  # The windows on the workspaces which are active on the monitors
+  local clients=''
+  clients="$(hyprctl -j clients | jq -r --argjson active_workspace_ids "[${active_workspace_ids:?}]" '[.[] | select([.workspace.id] | inside($active_workspace_ids))]')" || return "$?"
+
+  # The boxes of the visible windows
+  local boxes=''
+  boxes="$(jq -r '.[] | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' <<< "${clients}")" || return "$?"
+
+  if [ -z "${boxes}" ]; then
+    echo '[Error] No windows found on the active workspaces.' >&2
+    return 1
+  fi
+
+  local geometry=''
+  geometry="$(slurp -r <<< "${boxes}")" || return "$?"
+
+  # The geometry of `slurp` has the form `<x>,<y> <width>x<height>`, so the commas and the `x` act as the separators as well
+  local geometry_pattern='^-?[[:digit:]]+,-?[[:digit:]]+ [[:digit:]]+x[[:digit:]]+$'
+  if ! [[ "${geometry}" =~ ${geometry_pattern} ]]; then
+    echo "Failed to parse the geometry \"${geometry}\" of the selection." >&2
+    return 1
+  fi
+
+  local x=0
+  local y=0
+  local width=0
+  local height=0
+  IFS=' ,x' read -r x y width height <<< "${geometry}" || return "$?"
+
+  # The bounds of the monitors, in the form `<min_x> <min_y> <max_width> <max_height>`
+  local bounds=''
+  bounds="$(jq -r '[([.[] | .x] | min), ([.[] | .y] | min), ([.[] | if (.transform % 2 == 0) then (.x + .width) else (.x + .height) end] | max), ([.[] | if (.transform % 2 == 0) then (.y + .height) else (.y + .width) end] | max)] | join(" ")' <<< "${monitors}")" || return "$?"
+
+  local min_x=0
+  local min_y=0
+  local max_width=0
+  local max_height=0
+  IFS=' ' read -r min_x min_y max_width max_height <<< "${bounds}" || return "$?"
+
+  if [ "$((x + width))" -gt "${max_width}" ]; then
+    width="$((max_width - x))"
+  fi
+
+  if [ "$((y + height))" -gt "${max_height}" ]; then
+    height="$((max_height - y))"
+  fi
+
+  if [ "${x}" -lt "${min_x}" ]; then
+    width="$((width + x - min_x))"
+    x="${min_x}"
+  fi
+
+  if [ "${y}" -lt "${min_y}" ]; then
+    height="$((height + y - min_y))"
+    y="${min_y}"
+  fi
+
+  if [ "${width}" -le 0 ] || [ "${height}" -le 0 ]; then
+    echo "The selected window \"${x},${y} ${width}x${height}\" lies outside the bounds of the monitors." >&2
+    return 1
+  fi
+
+  echo "${x},${y} ${width}x${height}"
+}
+
 # Applies the fixes to hide the cursor from the screenshots
 #
 # Return codes:
@@ -70,7 +198,7 @@ is_png_file() {
 #
 # - `0`: The screenshot was taken;
 # - `1`: The file did not become a valid PNG image within the wait time;
-# - Other: The error code of `hyprshot`, `hyprpicker` or another tool used.
+# - Other: The error code of `hyprpicker` or another tool used.
 screenshot_take() {
   local path_to_file="${1-}" && shift "$(($# > 0))"
   local mode="${1-}" && shift "$(($# > 0))"
@@ -114,22 +242,22 @@ screenshot_take() {
     fi
   fi
 
-  # Freeze screen in the background
-  # NOTE: We don't use "hyprshot --freeze", because it does not properly copy freezed content.
+  # Freeze screen in the background.
+  # NOTE: We don't use "--render-inactive", because it does not properly copy freezed content.
   #       For example, some menu pop-ups, which looks like frozen, for some reason will not appear in the final screenshot.
   #       This happens for me with some pop-ups (not always, but frequently) on sites in the browser (Firefox).
-  # NOTE: We add timeout for hyprpicker, because sometimes it may start after "hyprshot" even with "sleep".
+  # NOTE: We add timeout for hyprpicker, because sometimes it may start after `capture` even with "sleep".
   #       In this case, screen will be freezed and you can't do nothing, except switching to another TTY and killing via "pkill -SIGKILL hyprpicker".
   #       So we kill it after 30 seconds to be able to have some solution.
   #       It happened to me from time to time on decent performance machine with "sleep 0.05", so I increased it.
-  timeout 30 hyprpicker "${hyprpicker_args[@]}" &
+  timeout 30 hyprpicker --no-fancy --quiet --no-zoom --disable-preview "${hyprpicker_args[@]}" &
 
   local hyprpicker_pid="$!"
   sleep 0.2 || return "$?"
 
   # Take screenshot and save to temporary file.
-  # NOTE: We write directly to the file and not via stdout pipe, because sometimes in bugs out and no image is copied in the end.
-  hyprshot --silent --mode="${mode}" --output-folder "${path_to_file_directory}" --filename "${file_name}" || return "$?"
+  # NOTE: We write directly to the file and not via stdout pipe, because sometimes it bugs out and no image is copied in the end.
+  capture "${mode}" "${path_to_file_directory}" "${file_name}" || return "$?"
 
   # Unfreeze screen
   kill "${hyprpicker_pid}" || return "$?"
@@ -212,12 +340,8 @@ image_compress() {
 # - Other: The error code of `wl-copy`.
 image_copy() {
   local path_to_file="${1-}" && shift "$(($# > 0))"
-
   echo "Copying image \"${path_to_file}\" to the clipboard..." >&2
-
-  # Copy result image to clipboard
-  wl-copy < "${path_to_file}" || return "$?"
-
+  wl-copy --type image/png < "${path_to_file}" || return "$?"
   echo "Copying image \"${path_to_file}\" to the clipboard: success!" >&2
 }
 
